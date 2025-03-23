@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Patching Is An Anti-pattern :: Various Rants</title>
+    <link rel="stylesheet" href="https://cibyr.github.io/site.css">
+    <meta name="description" content="A variety of rants">
+    <meta property="og:title" content="Patching Is An Anti-pattern :: Various Rants">
+    <meta property="og:description" content="A variety of rants">
+    <meta property="og:type" content="website">
+    
+    <meta property="og:url" content="https://cibyr.github.io/rants/patching/">
+    <link rel="canonical" href="https://cibyr.github.io/rants/patching/">
+    
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:creator" content="@cibyr">
+    <link rel="icon" href="/icon.png">
+    <meta name="theme-color" content="#1F1E1E">
+    <meta name="google-site-verification" content="eio57MhYkIZtpip7yE1em89sQFIzQe50vW7cV3k2_tM" />
+  </head>
+  <body>
+    <header>
+      <nav>
+      
+        <a href="/">Home</a>
+      
+        <a href="/rants/">Rants</a>
+      
+      </nav>
+      <hr>
+    </header>
+    <main>
+      
+  <h1 id="patching-is-an-anti-pattern">Patching Is An Anti-pattern</h1>
+<h2 id="security-updates-are-necessary-and-good">Security updates are necessary and good</h2>
+<p>If you're professionally responsible for one or more computers, part of that responsibility likely includes installing security updates. You probably have some sort of mandate from your CISO or security department (if you have either of those) to install security updates within a specified timeframe, and maybe even some reporting on how well you're actually keeping up with that. This is effectively just a requirement of being on the internet these days. Sure, people get worked up about 0-days and APTs, but <a href="https://www.cpomagazine.com/cyber-security/new-study-finds-that-ransomware-attacks-are-heavily-relying-on-old-vulnerabilities-unpatched-issues-dating-back-to-2010-still-exploited/">the most basic thing that's going to ruin your day is some workaday ransomware crew exploiting years-old vulnerabilities</a>. Running old, vulnerable software is just asking for trouble; the internet equivalent of wearing a "kick me" sign on the school playground.</p>
+<p>Hence, device management tools that nag users, remotely install updates, report on compliance, and even block network access as required to get updates installed. This all makes sense for traditional IT - laptops, desktops, smartphones and such; probably even for physical servers if you're unlucky enough to still have any of those. But, I'm here to tell you, it does <em>not</em> make any sense in the cloud. In fact, it's a sign that something is horribly wrong with how you build, test, and deploy software.</p>
+<h2 id="the-cloud-is-magical">The cloud is magical</h2>
+<p>You - yes <em>you</em>, dear reader - have the ability to conjure computers into existence in mere seconds. That's what <code>aws ec2 run-instances</code> does, and all the other cloud providers have something equivalent. Even if you're running on-premises servers, you're probably not running them on bare metal; virtualization makes life so much easier you've either got to be a masochist or doing something special like HPC to be bothered running on physical machines. So servers are something that come and go at your whims. You might even have automation that launches new servers when you need to scale up under load, and shuts them down again when it gets quiet.</p>
+<p>But that's not even the magical part! The <em>really</em> cool thing is that when you create a virtual machine, you specify the contents of its boot volume. Thus, you get to choose exactly what software it runs, right from the get-go! This is amazingly powerful. If you (or your build system) creates a disk image with your software and all its dependencies already installed, a lot of things get better:</p>
+<ul>
+<li>Deployments are now just creating machines with your new image, and shutting down the old ones</li>
+<li>Rollbacks are the same, but with the old version instead</li>
+<li>Scaling up is quick and painless - just run more machines!</li>
+</ul>
+<p>All of this is just as true of containers as well - a container image is really just a filesystem image composed of copy-on-write layers.</p>
+<h3 id="but-i-have-state-on-disk">But I have state on disk!</h3>
+<p>Yeah yeah, so do I. Don't put it on your boot volume. Obviously it's heaps more convenient if your state is in some database (or object storage service) you talk to over the network, but even if you have some good reason to put your state in files on a local filesystem, you can still follow this pattern.</p>
+<p>If you're using network-attached block storage like EBS, then it's easy: keep your data on a second volume. During deployments you take the data volume from your old machine, attach it to your new machine, and you're good to go!</p>
+<p>Even if you're using local storage, you can <a href="https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/replace-root.html">replace your boot volume</a> without losing your local state.</p>
+<h2 id="or-you-could-do-it-the-hard-way">Or you could do it the hard way</h2>
+<p>A lot of systems I've seen do something else instead. They launch machines with a "base image" that contains little more than an OS. Then, upon first boot, the OS installs security updates (possibly rebooting along the way if this includes a new kernel). Once it's done with that, it downloads the application that it's supposed to be running (and whatever dependencies are required) from somewhere. Only then (maybe minutes later!) can it start running the code that is the sole reason it was brought into existence to run. Usually there's separate processes to deploy (and rollback) updates to the application, and often a third process to trigger OS security updates.</p>
+<p>This <em>sucks</em>. It makes scaling up slower (which in turn means the system needs to operate with a larger buffer, increasing costs), and introduces the possibility that freshly-launched machines might behave differently to existing ones that have just received a deployment. But it gets worse...</p>
+<h3 id="do-you-like-testing-in-production">Do you like testing in production?</h3>
+<p>Did you catch that part about the OS installing updates on boot? I skipped an important detail there: what version of the OS packages does it update <em>to</em>? Well, they're security updates, so you probably need the latest—</p>
+<p>Oops! Now when you launch a new machine, you're potentially creating a combination of versions (OS packages and your application code) that has never existed anywhere else before. That's probably fine if that happens in your development or testing environment, but if you're scaling up in production, this is scary! One of those updates might have introduced a horrible performance regression for your application. It's even possible for an update to break an assumption that your deployment scripts were relying on - preventing your application from starting at all!</p>
+<p>This isn't a hypothetical. I've seen systems like this run from years with no apparent problems, and then suddenly the team responsible finds themselves unable to deploy, scale up, or even rollback, worldwide! The one saving grace is so long as you don't touch <em>anything</em>, servers that are currently running will probably stay running. What a nightmare!</p>
+<picture>
+  <source srcset="https://cibyr.github.io//rants/patching/testing-in-prod.jpg" type="img/jpg">
+  <img src="testing-in-prod.jpg" alt="I don&#x27;t always test my code, but when I do, I do it in production"/>
+</picture>
+<p>You can avoid this disaster by pinning the version of updates that get installed, and rolling out changes to that version pin with the same care that you would deploy updates to your own code. This seems like a half-measure to me: now you're going to all the effort of versioning, testing, and deploying updates to your OS but without the benefits of having those updates baked into the image you run machines with.</p>
+<h2 id="security-updates-are-just-changes-you-want-to-deploy">Security updates are just changes you want to deploy</h2>
+<p>Just like updating a version of a library you depend on, deploying OS updates should be a straightforward, controlled, process:</p>
+<ol>
+<li>
+<p>A human (or ideally, some automation) notices a new version has been published and updates the source-controlled reference that tells your build system where to get it.</p>
+</li>
+<li>
+<p>Your build system assembles it with the rest of your software into an artifact that can be deployed to production (e.g., a machine or container image).</p>
+<ul>
+<li>Probably also runs some unit tests, but that's not particularly relevant to this story.</li>
+</ul>
+</li>
+<li>
+<p>You (or some automation) deploy that new image to your test environment(s) and check that it works.</p>
+</li>
+<li>
+<p>Then gradually deploy it to your production environments, monitoring for issues as it goes.</p>
+</li>
+</ol>
+<p>Just like that, you're no longer running old, vulnerable software yet you haven't patched a single machine! Even better, if something <em>does</em> go wrong, you have an obvious, straightforward way to roll it back.</p>
+<p>So say it with me now:</p>
+<h1 id="patchingclap-isclap-anclap-anticlap-patternclap">Patching👏Is👏An👏Anti👏Pattern👏</h1>
+
+
+    </main>
+  </body>
+</html>

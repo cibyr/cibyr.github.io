@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://cibyr.github.io/</loc>
+    </url>
+    <url>
+        <loc>https://cibyr.github.io/rants/</loc>
+    </url>
+    <url>
+        <loc>https://cibyr.github.io/rants/channels-versions/</loc>
+        <lastmod>2025-03-23</lastmod>
+    </url>
+    <url>
+        <loc>https://cibyr.github.io/rants/hello/</loc>
+        <lastmod>2023-05-19</lastmod>
+    </url>
+    <url>
+        <loc>https://cibyr.github.io/rants/patching/</loc>
+        <lastmod>2023-05-21</lastmod>
+    </url>
+</urlset>
