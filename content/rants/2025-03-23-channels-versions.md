@@ -21,7 +21,7 @@ If you're responsible for a service that lots of people rely on, you should care
 
 Versions are strings, that often look something like "2.0.541982.0" or "15.3.1", where the same string always refers to the same code. Git commit hashes are versions. Rust crate versions are versions (at least for crates that have been published on [crates.io](https://crates.io/), which disallows overwriting an existing version).
 
-Channels are strings, that often look something like "alpha", "stable", or "latest", where the string refers to somewhere to get code. What code you actually get changes over time. Git branch names, brazil version set names, RPM repositories, docker image tags, are all examples of channels.
+Channels are strings, that often look something like "alpha", "stable", or "latest", where the string refers to somewhere to get code. What code you actually get changes over time. Git branch names, RPM repositories, and docker image tags are all examples of channels.
 
 Note that because what version you get from a channel changes over time, it's impossible to reason correctly about having tested a particular version if all you know is the channel the code you tested came from. It's also impossible to actually roll back a deployment that pulls software from a channel at deployment time, at least whenever the software vended via that channel changes between deployments - your rollback deployment will _also_ grab the latest (broken) version from that channel.
 
